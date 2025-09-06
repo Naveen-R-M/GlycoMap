@@ -1,0 +1,28 @@
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
+
+# Install dependencies with specific flags to speed up and avoid issues
+RUN npm ci --no-audit --no-fund --omit=dev
+
+# Copy only the necessary files to build
+COPY next.config.js ./
+COPY tsconfig.json ./
+COPY .eslintrc.json ./
+COPY app ./app
+COPY public ./public
+COPY components ./components
+
+# Build the app without ESLint
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npx next build --no-lint
+
+# Expose port
+EXPOSE 3000
+
+# Start the app
+CMD ["npm", "start"]

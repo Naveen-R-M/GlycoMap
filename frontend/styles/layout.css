@@ -1,0 +1,32 @@
+/* Apply Nothing Font 5x7 to all headings and key elements */
+h1, h2, h3, h4, h5, h6,
+button, input, label, .btn, 
+.text-heading, .heading {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Apply to navigation elements */
+nav, .nav-item, .menu-item {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+}
+
+/* For tags that need pixel font but with emphasis on readability */
+.pixel-text-body {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+}
+
+/* For short titles and headers */
+.pixel-text-title {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+/* For UI elements and buttons */
+.pixel-text-ui {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}

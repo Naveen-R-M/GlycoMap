@@ -1,0 +1,42 @@
+/* Font utility classes */
+.font-5x7 {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Size adjustments for pixel font */
+.text-5x7-lg {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  font-size: 1.25rem !important;
+  line-height: 1.75rem !important;
+  letter-spacing: 0.02em !important;
+}
+
+.text-5x7-xl {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+  letter-spacing: 0.02em !important;
+}
+
+.text-5x7-2xl {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  font-size: 1.75rem !important;
+  line-height: 2.25rem !important;
+  letter-spacing: 0.02em !important;
+}
+
+.text-5x7-3xl {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+  font-size: 2rem !important;
+  line-height: 2.5rem !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Button and input text with pixel font */
+.btn-5x7 {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+}
+
+.input-5x7 {
+  font-family: 'Nothing Font 5x7', system-ui, -apple-system, sans-serif !important;
+}
