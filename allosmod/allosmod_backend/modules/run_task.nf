@@ -10,7 +10,7 @@ process RUN_TASK {
 
   script:
   """
-  LOG_DIR="${params.log_root}/${params.user_id}"
+  LOG_DIR="${LOG_ROOT}/${params.user_id}"
   mkdir -p "\${LOG_DIR}"
 
   export SGE_TASK_ID=\$(( ${run_id} + 1 ))

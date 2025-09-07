@@ -58,7 +58,7 @@ ALLOSMOD_SCRIPT_PATH = os.path.abspath(os.environ.get('ALLOSMOD_SCRIPT_PATH', '.
 
 # Scratch and Logs Directories
 SCRATCH_DIR = os.environ.get('SCRATCH_DIR', '/scratch/rajagopalmohanraj.n')
-LOGS_DIR = os.environ.get('LOGS_DIR', os.path.join(SCRATCH_DIR, 'allosmod_inputs/logs'))
+LOGS_DIR = os.environ.get('LOGS_DIR', os.path.join(SCRATCH_DIR, 'GlycoMap/allosmod/backend/logs'))
 
 # File.io API URL
 FILEIO_API_URL = os.environ.get('FILEIO_API_URL', 'https://file.io/')

@@ -1,15 +1,16 @@
 nextflow.enable.dsl = 2
 
-// ---- Params (defaults + CLI override)
-params.base_folder = params.base_folder ?: System.getenv('BASE_FOLDER')
-params.user_id     = params.user_id     ?: 'unknown'
-params.email       = params.email       ?: 'user@example.com'
-params.name        = params.name        ?: 'User'
-params.log_root    = params.log_root    ?: "./logs"
-params.outdir      = params.outdir      ?: "results"
+// ---- Require essentials
+if( !params.user_id )  exit 1, "ERROR: --user_id is required (provided via -params-file)"
+if( !params.email )    exit 1, "ERROR: --email is required (provided via -params-file)"
+if( !params.name )     exit 1, "ERROR: --name is required (provided via -params-file)"
 
-if( !params.base_folder )
-  exit 1, "ERROR: --base_folder not set"
+// Derive from INPUTS_ROOT (set in nextflow.config env {})
+params.base_folder = "${System.getenv('INPUTS_ROOT')}/${params.user_id}"
+
+// Optional fields
+params.organization = params.organization ?: ''
+params.description  = params.description  ?: ''
 
 // ---- Include processes/subworkflows from modules
 include { SETUP_ALLOSMOD      } from './modules/setup_allosmod.nf'
@@ -30,7 +31,7 @@ FOLDERS
     def inputDat = file("${folder}/input.dat")
     def nruns = 0
     if( inputDat.exists() ) {
-      def m = (inputDat.text =~ /(?m)^NRUNS=(\d+)/)
+      def m = (inputDat.text =~ /(?m)^\s*NRUNS\s*=\s*(\d+)/)
       if( m.find() ) nruns = m.group(1) as int
     }
     tuple(folder, nruns)
@@ -72,11 +73,12 @@ workflow {
   ALL_DONE = UP_DONE.collect()
   ZIP_AND_EMAIL( ALL_DONE )
 
-  // Optional: final message
-  workflow.onComplete {
-    println ""
-    println "✅ Pipeline complete."
-    println "  Logs: ${params.log_root}/${params.user_id}"
-    println "  Results: ${params.outdir}"
-  }
+}
+
+// Optional: final message
+workflow.onComplete {
+  println ""
+  println "✅ Pipeline complete."
+  println "  Logs: ${System.getenv('LOG_ROOT')}/${params.user_id}"
+  println "  Results: ${params.outdir}"
 }
