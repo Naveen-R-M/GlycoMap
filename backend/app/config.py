@@ -7,6 +7,28 @@ from typing import Optional, List   # <-- add this
 load_dotenv()
 
 class Settings(BaseModel):
+
+    # HPC SSH
+    HPC_HOST: str = os.getenv("HPC_HOST", "")
+    HPC_PORT: int = int(os.getenv("HPC_PORT", 22))
+    HPC_USER: str = os.getenv("HPC_USER", "")
+    HPC_SSH_KEY: str = os.getenv("HPC_SSH_KEY", "")
+    HPC_KNOWN_HOSTS: Optional[str] = os.getenv("HPC_KNOWN_HOSTS")
+
+    # HPC paths
+    HPC_SCRATCH_ROOT: str = os.getenv("HPC_SCRATCH_ROOT", "/scratch/rajagopalmohanraj.n")
+    HPC_NEXTFLOW_PROJECT_DIR: str = os.path.abspath(os.getenv("HPC_NEXTFLOW_PROJECT_DIR", "."))
+    HPC_NEXTFLOW_ENTRY: str = os.getenv("HPC_NEXTFLOW_ENTRY", "main.nf")
+    HPC_NEXTFLOW_EXTRA_ARGS: str = os.getenv("HPC_NEXTFLOW_EXTRA_ARGS", "")
+
+    # Optional modules
+    HPC_MODULE_INIT: Optional[str] = os.getenv("HPC_MODULE_INIT")
+    HPC_MODULES: Optional[str] = os.getenv("HPC_MODULES")
+
+    # Derived HPC roots used by your pipeline
+    HPC_INPUTS_ROOT: str = os.path.join(HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_inputs")
+    HPC_LOGS_DIR: str    = os.path.join(HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_backend/logs")
+
     # Logging
     LOG_FILE: str = os.getenv("LOG_FILE", "app.log")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

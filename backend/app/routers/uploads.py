@@ -11,6 +11,7 @@ from app.models.schemas import UploadResponse
 from app.deps import bind_user_id
 from app.context import user_id_var
 from typing import List, Optional
+from app.services.hpc import stage_files_and_start_nf
 
 logger = setup_logging()
 router = APIRouter()
@@ -62,26 +63,24 @@ async def upload(
     # Save files to staging
     saved_files = save_uploads(user_dir, files)
 
-    # Stage & move to Nextflow inputs root for discovery
-    for filename in saved_files:
-        file_path = os.path.join(user_dir, filename)
-        try:
-            _placed = process_uploaded_file(
-                saved_file_path=file_path,
-                number_of_runs=numberOfRuns,
-                user_dir=user_dir,
-                req_user_id=req_user_id,
-            )
-        except Exception as e:
-            logger.exception(f"Error processing {filename}: {e}")
-            raise HTTPException(status_code=500, detail=f"Error processing {filename}: {e}")
-
-    # Kick off a single Nextflow run
-    run_meta = run_nextflow(req_user_id=req_user_id, email=email, name=name, organization=organization, description=description)
+    local_paths = [os.path.join(user_dir, f) for f in saved_files]
+    try:
+        run_meta = stage_files_and_start_nf(
+            local_files=local_paths,
+            number_of_runs=numberOfRuns,
+            req_user_id=req_user_id,
+            email=email,
+            name=name,
+            organization=organization,
+            description=description,
+        )
+    except Exception as e:
+        logger.exception(f"HPC submit failed: {e}")
+        raise HTTPException(status_code=500, detail=f"HPC submit failed: {e}")
 
     return UploadResponse(
         status="success",
-        message="Files uploaded and Nextflow run started",
+        message="Files uploaded and remote Nextflow run started",
         email=email,
         name=name,
         files=saved_files,
