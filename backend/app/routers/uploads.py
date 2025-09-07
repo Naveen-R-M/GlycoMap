@@ -10,6 +10,7 @@ from ..services.process import save_uploads, process_uploaded_file, run_nextflow
 from ..models.schemas import UploadResponse
 from ..deps import bind_user_id
 from ..context import user_id_var
+from typing import List, Optional
 
 logger = setup_logging()
 router = APIRouter()
@@ -19,11 +20,11 @@ async def upload(
     background: BackgroundTasks,
     email: str = Form(...),
     name: str = Form(...),
-    organization: str = Form("") ,
-    description: str = Form("") ,
+    organization: str = Form(""),
+    description: str = Form(""),
     numberOfRuns: int = Form(1),
-    user_id: str | None = Form(None),
-    files: List[UploadFile] = File(...),
+    user_id: Optional[str] = Form(None),
+    files: List[UploadFile] = File(..., alias="zipfiles"),  # keep alias if FE sends 'zipfiles'
     _ = Depends(bind_user_id),
 ):
     if not files:
