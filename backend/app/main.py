@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .config import settings
-from .middleware import RequestContextMiddleware
-from .routers import root, uploads
+from app.config import settings
+from app.middleware import RequestContextMiddleware
+from app.routers import root, uploads
 
 app = FastAPI(title="Allosmod Uploader", version="1.0.0")
 

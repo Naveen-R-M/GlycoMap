@@ -1,5 +1,5 @@
 from fastapi import Depends, Request
-from .context import user_id_var
+from app.context import user_id_var
 
 # Dependency that updates the logging user_id context if present in form/query
 async def bind_user_id(request: Request) -> str:

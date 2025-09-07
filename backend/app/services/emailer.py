@@ -2,7 +2,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import smtplib
 from typing import Optional
-from ..config import settings
+from app.config import settings
 
 def send_email(email: str, download_link: Optional[str], name: str, job_id: str) -> None:
     if not (settings.SMTP_SERVER and settings.SMTP_USER and settings.SMTP_PASSWORD):

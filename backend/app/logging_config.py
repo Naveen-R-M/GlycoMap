@@ -1,7 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from .context import user_id_var
-from .config import settings
+from app.context import user_id_var
+from app.config import settings
 
 class UserContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:

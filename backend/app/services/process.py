@@ -4,8 +4,8 @@ import time
 import json
 from typing import List
 from fastapi import UploadFile
-from ..config import settings
-from ..utils.shell import run
+from app.config import settings
+from app.utils.shell import run
 
 # === SLURM helper (legacy pattern, optional) ===
 

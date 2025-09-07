@@ -1,6 +1,6 @@
 import requests
 from typing import Optional
-from ..config import settings
+from app.config import settings
 
 def upload_to_fileio(file_path: str) -> Optional[str]:
     url = settings.FILEIO_API_URL

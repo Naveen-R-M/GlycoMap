@@ -45,3 +45,5 @@ class Settings(BaseModel):
 
     # CORS (List[str] instead of list[str])
     CORS_ORIGINS: List[str] = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
+
+settings = Settings()
