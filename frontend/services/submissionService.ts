@@ -18,7 +18,7 @@ export class SubmissionService {
     
     // Add all files
     data.files.forEach(file => {
-      formData.append('zipfiles', file)
+      formData.append('files', file)
     })
     
     // Add form fields

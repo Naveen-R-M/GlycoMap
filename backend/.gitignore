@@ -1,0 +1,29 @@
+# Logs
+**/app.log*
+logs/
+*.log
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*.egg-info/
+.build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
+
+# Env/config secrets
+.env
+.env.*
+!.env.example
+
+# Uvicorn reload artifacts
+*.pid
