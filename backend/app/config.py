@@ -1,5 +1,6 @@
 from __future__ import annotations  # optional but harmless
 import os
+import posixpath  # For remote POSIX paths
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from typing import Optional, List   # <-- add this
@@ -13,11 +14,12 @@ class Settings(BaseModel):
     HPC_PORT: int = int(os.getenv("HPC_PORT", 22))
     HPC_USER: str = os.getenv("HPC_USER", "")
     HPC_SSH_KEY: str = os.getenv("HPC_SSH_KEY", "")
+    HPC_PASSWORD: str = os.getenv("HPC_PASSWORD", "")
     HPC_KNOWN_HOSTS: Optional[str] = os.getenv("HPC_KNOWN_HOSTS")
 
     # HPC paths
     HPC_SCRATCH_ROOT: str = os.getenv("HPC_SCRATCH_ROOT", "/scratch/rajagopalmohanraj.n")
-    HPC_NEXTFLOW_PROJECT_DIR: str = os.path.abspath(os.getenv("HPC_NEXTFLOW_PROJECT_DIR", "."))
+    HPC_NEXTFLOW_PROJECT_DIR: str = os.getenv("HPC_NEXTFLOW_PROJECT_DIR", "/scratch/rajagopalmohanraj.n/GlycoMap/allosmod/allosmod_backend")
     HPC_NEXTFLOW_ENTRY: str = os.getenv("HPC_NEXTFLOW_ENTRY", "main.nf")
     HPC_NEXTFLOW_EXTRA_ARGS: str = os.getenv("HPC_NEXTFLOW_EXTRA_ARGS", "")
 
@@ -25,9 +27,15 @@ class Settings(BaseModel):
     HPC_MODULE_INIT: Optional[str] = os.getenv("HPC_MODULE_INIT")
     HPC_MODULES: Optional[str] = os.getenv("HPC_MODULES")
 
-    # Derived HPC roots used by your pipeline
-    HPC_INPUTS_ROOT: str = os.path.join(HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_inputs")
-    HPC_LOGS_DIR: str    = os.path.join(HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_backend/logs")
+    @property
+    def HPC_INPUTS_ROOT(self) -> str:
+        """Derived HPC inputs path using POSIX separators"""
+        return posixpath.join(self.HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_inputs")
+        
+    @property  
+    def HPC_LOGS_DIR(self) -> str:
+        """Derived HPC logs path using POSIX separators"""
+        return posixpath.join(self.HPC_SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_backend/logs")
 
     # Logging
     LOG_FILE: str = os.getenv("LOG_FILE", "app.log")
@@ -38,13 +46,19 @@ class Settings(BaseModel):
     UPLOAD_FOLDER: str = os.path.abspath(os.getenv("UPLOAD_FOLDER", "../../allosmod_inputs/uploads"))
     SCRATCH_ROOT: str = os.getenv("SCRATCH_ROOT", "/scratch/rajagopalmohanraj.n")
 
-    # Derived paths
-    INPUTS_ROOT: str = os.path.join(SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_inputs")
-    LOGS_DIR: str = os.path.join(SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_backend/logs")
+    @property
+    def INPUTS_ROOT(self) -> str:
+        """Derived inputs path using POSIX separators"""
+        return posixpath.join(self.SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_inputs")
+        
+    @property
+    def LOGS_DIR(self) -> str:
+        """Derived logs path using POSIX separators"""
+        return posixpath.join(self.SCRATCH_ROOT, "GlycoMap/allosmod/allosmod_backend/logs")
 
     # Nextflow
     NEXTFLOW_BIN: str = os.getenv("NEXTFLOW_BIN", "nextflow")
-    NEXTFLOW_PROJECT_DIR: str = os.path.abspath(os.getenv("NEXTFLOW_PROJECT_DIR", "."))
+    NEXTFLOW_PROJECT_DIR: str = os.getenv("NEXTFLOW_PROJECT_DIR", "/scratch/rajagopalmohanraj.n/GlycoMap/allosmod/allosmod_backend")
     NEXTFLOW_ENTRY: str = os.getenv("NEXTFLOW_ENTRY", "main.nf")
     NEXTFLOW_EXTRA_ARGS: str = os.getenv("NEXTFLOW_EXTRA_ARGS", "")
 

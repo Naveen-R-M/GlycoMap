@@ -25,7 +25,7 @@ async def upload(
     description: str = Form(""),
     numberOfRuns: int = Form(1),
     user_id: Optional[str] = Form(None),
-    files: List[UploadFile] = File(..., alias="zipfiles"),  # keep alias if FE sends 'zipfiles'
+    files: List[UploadFile] = File(..., alias="files"),
     _ = Depends(bind_user_id),
 ):
     if not files:

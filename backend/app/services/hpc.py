@@ -4,42 +4,75 @@ import paramiko
 
 from ..config import settings
 
-def _connect() -> Tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+def _connect():
     ssh = paramiko.SSHClient()
-    # Trust-on-first-use; for strict security, load known_hosts and refuse unknown
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    if settings.HPC_KNOWN_HOSTS and os.path.exists(settings.HPC_KNOWN_HOSTS):
-        ssh.load_host_keys(settings.HPC_KNOWN_HOSTS)
+
+    # Normalize key path (Windows-friendly)
+    key_path = os.path.expanduser(getattr(settings, "HPC_SSH_KEY", "") or "")
+    if os.name == "nt":
+        key_path = os.path.normpath(key_path)
 
     pkey = None
-    if settings.HPC_SSH_KEY and os.path.exists(settings.HPC_SSH_KEY):
+    passphrase = getattr(settings, "HPC_SSH_PASSPHRASE", None)
+
+    if key_path and os.path.exists(key_path):
         try:
-            pkey = paramiko.Ed25519Key.from_private_key_file(settings.HPC_SSH_KEY)
-        except Exception:
-            pkey = paramiko.RSAKey.from_private_key_file(settings.HPC_SSH_KEY)
+            pkey = paramiko.Ed25519Key.from_private_key_file(key_path, password=passphrase)
+        except paramiko.PasswordRequiredException:
+            raise RuntimeError("Key is passphrase-protected: set HPC_SSH_PASSPHRASE or use ssh-agent (ssh-add).")
+        except paramiko.SSHException:
+            pkey = paramiko.RSAKey.from_private_key_file(key_path, password=passphrase)
 
     ssh.connect(
         hostname=settings.HPC_HOST,
         port=settings.HPC_PORT,
         username=settings.HPC_USER,
-        pkey=pkey,
-        look_for_keys=False,
+        pkey=pkey,                         # ok if None
+        password=getattr(settings, "HPC_PASSWORD", None),  # optional fallback if allowed
+        look_for_keys=True,                # try ~/.ssh and agent keys too
         allow_agent=True,
         timeout=20,
     )
     sftp = ssh.open_sftp()
     return ssh, sftp
 
+
 def _sftp_mkdirs(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
-    # Make dirs recursively on remote (POSIX paths)
+    """Make directories recursively via SFTP with SSH fallback."""
+    # First, try the SFTP approach
     parts = remote_dir.strip("/").split("/")
     cur = ""
+    sftp_success = True
+    
     for p in parts:
         cur = f"{cur}/{p}" if cur else f"/{p}"
         try:
             sftp.stat(cur)
         except IOError:
-            sftp.mkdir(cur)
+            try:
+                sftp.mkdir(cur)
+            except IOError:
+                sftp_success = False
+                break
+    
+    # If SFTP failed, use SSH as fallback (more reliable for complex paths)
+    if not sftp_success:
+        try:
+            # Get SSH client from the SFTP transport
+            ssh_client = paramiko.SSHClient()
+            ssh_client._transport = sftp.get_channel().get_transport()
+            
+            # Use mkdir -p which is more reliable
+            stdin, stdout, stderr = ssh_client.exec_command(f'mkdir -p "{remote_dir}"')
+            exit_code = stdout.channel.recv_exit_status()
+            
+            if exit_code != 0:
+                error_msg = stderr.read().decode().strip()
+                raise RuntimeError(f"SSH mkdir failed: {error_msg}")
+                
+        except Exception as e:
+            raise RuntimeError(f"Both SFTP and SSH directory creation failed: {e}")
 
 def _run_remote(ssh: paramiko.SSHClient, cmd: str, env: Optional[dict] = None) -> Tuple[int,str,str]:
     # Prefix env exports
@@ -54,7 +87,7 @@ def _run_remote(ssh: paramiko.SSHClient, cmd: str, env: Optional[dict] = None) -
     return code, out, err
 
 def _put_file(sftp: paramiko.SFTPClient, local: str, remote: str) -> None:
-    _sftp_mkdirs(sftp, posixpath.dirname(remote))
+    # Just put the file - we'll ensure parent directories exist beforehand
     sftp.put(local, remote)
 
 def stage_archive_to_inputs(
@@ -73,7 +106,12 @@ def stage_archive_to_inputs(
     stamp = str(int(time.time()))
     remote_stage = posixpath.join(settings.HPC_LOGS_DIR, req_user_id, "staging", stamp)
     remote_archive = posixpath.join(remote_stage, filename)
-    _sftp_mkdirs(sftp, remote_stage)
+    
+    # Create staging directory using SSH (more reliable)
+    cmd = f'mkdir -p "{remote_stage}"'
+    code, out, err = _run_remote(ssh, cmd)
+    if code != 0:
+        raise RuntimeError(f"Failed to create staging directory: {err}")
     _put_file(sftp, local_path, remote_archive)
 
     project_stem = os.path.splitext(filename)[0]
@@ -154,7 +192,12 @@ def submit_nextflow(
         "description": description
     }
     sftp = ssh.open_sftp()
-    _sftp_mkdirs(sftp, nf_logs_user)
+    
+    # Create nextflow logs directory using SSH (more reliable)
+    cmd = f'mkdir -p "{nf_logs_user}"'
+    code, out, err = _run_remote(ssh, cmd)
+    if code != 0:
+        raise RuntimeError(f"Failed to create nextflow logs directory: {err}")
     with sftp.file(params_path, "w") as f:
         f.write(json.dumps(params_payload))
 
@@ -198,9 +241,21 @@ def stage_files_and_start_nf(
 ) -> dict:
     ssh, sftp = _connect()
     try:
-        # ensure base dirs exist
-        _sftp_mkdirs(sftp, posixpath.join(settings.HPC_LOGS_DIR, req_user_id))
-        _sftp_mkdirs(sftp, posixpath.join(settings.HPC_INPUTS_ROOT, req_user_id))
+        # ensure base dirs exist using SSH command (more reliable)
+        logs_dir = posixpath.join(settings.HPC_LOGS_DIR, req_user_id)
+        inputs_dir = posixpath.join(settings.HPC_INPUTS_ROOT, req_user_id)
+        
+        # Use SSH command for reliable directory creation
+        cmd = f'mkdir -p "{logs_dir}" "{inputs_dir}"'
+        code, out, err = _run_remote(ssh, cmd)
+        if code != 0:
+            raise RuntimeError(f"Failed to create directories: {err}")
+        
+        # Verify directories are writable
+        test_cmd = f'test -w "{logs_dir}" && test -w "{inputs_dir}" && echo "OK"'
+        code, out, err = _run_remote(ssh, test_cmd)
+        if code != 0 or "OK" not in out:
+            raise RuntimeError(f"Directories not writable: {err}")
 
         # stage each file (upload→extract→place)
         placed = []
