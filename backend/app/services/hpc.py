@@ -201,16 +201,14 @@ def submit_nextflow(
     with sftp.file(params_path, "w") as f:
         f.write(json.dumps(params_payload))
 
-    # build remote command
+    # build remote command - use nf_run.sh script instead of direct nextflow
     extra = settings.HPC_NEXTFLOW_EXTRA_ARGS.strip()
+    nf_script = posixpath.join(settings.HPC_SCRATCH_ROOT, "nf_run.sh")
     cmd = f"""
         set -euo pipefail
-        [ -f "{settings.HPC_MODULE_INIT or ''}" ] && source "{settings.HPC_MODULE_INIT}" || true
-        {settings.HPC_MODULES or ''}
-
         export SCRATCH_ROOT="{settings.HPC_SCRATCH_ROOT}"
         cd "{settings.HPC_NEXTFLOW_PROJECT_DIR}"
-        nohup {settings.NEXTFLOW_BIN} run "{settings.HPC_NEXTFLOW_ENTRY}" \
+        nohup {nf_script} run "{settings.HPC_NEXTFLOW_ENTRY}" \
           -params-file "{params_path}" -name "{run_name}" \
           -with-report "{report}" -with-trace "{trace}" -with-timeline "{timeline}" \
           {extra} > "{stdout_log}" 2>&1 & echo $!
