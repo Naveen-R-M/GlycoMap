@@ -277,6 +277,7 @@ allosmod_inputs/uploads/
 uploads/
 **/uploads/*
 !**/uploads/.gitkeep
+inputs/*
 
 # Log files
 backend/app.log*

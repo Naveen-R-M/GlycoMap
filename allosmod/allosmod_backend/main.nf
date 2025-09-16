@@ -79,6 +79,6 @@ workflow {
 workflow.onComplete {
   println ""
   println "✅ Pipeline complete."
-  println "  Logs: ${System.getenv('LOG_ROOT')}/${params.user_id}"
+  println "  Logs: ${LOG_ROOT}/${params.user_id}"
   println "  Results: ${params.outdir}"
 }

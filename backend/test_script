@@ -1,0 +1,53 @@
+#!/bin/bash
+# Deploy the Java-conflict-fixed nf_run.sh script to HPC
+
+echo "Deploying Java-conflict-fixed Nextflow script..."
+
+LOCAL_SCRIPT="C:/Users/navee/Projects/SimBioSys Lab/GlycoMap/nf_run_fixed.sh"
+REMOTE_PATH="/scratch/rajagopalmohanraj.n/nf_run.sh"
+
+if [ ! -f "$LOCAL_SCRIPT" ]; then
+    echo "❌ Fixed script not found: $LOCAL_SCRIPT"
+    exit 1
+fi
+
+echo "📤 Uploading fixed nf_run.sh..."
+scp -i ~/.ssh/id_ed25519 "$LOCAL_SCRIPT" rajagopalmohanraj.n@login.explorer.northeastern.edu:"$REMOTE_PATH"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Script uploaded successfully"
+    
+    echo "🔧 Making executable and testing..."
+    ssh -i ~/.ssh/id_ed25519 rajagopalmohanraj.n@login.explorer.northeastern.edu "
+        chmod +x '$REMOTE_PATH'
+        echo '=== Testing fixed script ==='
+        
+        # Test the script
+        if '$REMOTE_PATH' -version >/dev/null 2>&1; then
+            echo '✅ Fixed script works! Java conflict resolved.'
+            echo ''
+            echo '📋 Nextflow version:'
+            '$REMOTE_PATH' -version 2>&1 | head -8
+        else
+            echo '❌ Script still has issues - showing debug output:'
+            '$REMOTE_PATH' -version 2>&1 | head -20
+        fi
+        
+        echo ''
+        echo '🎯 Deployment completed!'
+    "
+else
+    echo "❌ Upload failed"
+    exit 1
+fi
+
+echo ""
+echo "🎉 Fixed nf_run.sh deployed!"
+echo ""
+echo "🚀 Next steps:"
+echo "  1. The Java library conflict should now be resolved"
+echo "  2. Submit a new job through your web interface"  
+echo "  3. You should see actual progress instead of immediate completion"
+echo "  4. Your 5 projects (7q9m, align, bg505, glyc, input) should execute properly"
+echo ""
+echo "📊 Expected result: 500 total molecular dynamics simulations (100 per project)"
