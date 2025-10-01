@@ -57,31 +57,34 @@ export default function CicadaSimBioSysInterface() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#F5F4F9] text-[#1A1A1A] font-sans">
-      {/* Fixed Header */}
+    <div className="relative min-h-screen text-[#1A1A1A] font-sans">
+      {/* Floating Header - Outside normal document flow */}
       <Header onScrollToForm={scrollToForm} />
 
-      {/* Hero Section with 3D Scene */}
-      <HeroSection onScrollToForm={scrollToForm} />
+      {/* Main Content Container - Starts at viewport top */}
+      <main className="relative">
+        {/* Hero Section with 3D Scene */}
+        <HeroSection onScrollToForm={scrollToForm} />
 
-      {/* Multi-Step Form Section */}
-      <MultiStepForm 
-        ref={formSectionRef}
-        showForm={showForm}
-        onSubmitSuccess={handleSubmitSuccess}
-        onSubmitError={handleSubmitError}
-      />
+        {/* Multi-Step Form Section */}
+        <MultiStepForm 
+          ref={formSectionRef}
+          showForm={showForm}
+          onSubmitSuccess={handleSubmitSuccess}
+          onSubmitError={handleSubmitError}
+        />
 
-      {/* Status Messages */}
-      <SubmissionStatus 
-        isSubmitted={isSubmitted} 
-        isError={submitError} 
-        errorMessage={errorMessage} 
-        jobIds={jobIds} 
-      />
+        {/* Status Messages */}
+        <SubmissionStatus 
+          isSubmitted={isSubmitted} 
+          isError={submitError} 
+          errorMessage={errorMessage} 
+          jobIds={jobIds} 
+        />
 
-      {/* Footer Section */}
-      <Footer />
+        {/* Footer Section */}
+        <Footer />
+      </main>
     </div>
   )
 }

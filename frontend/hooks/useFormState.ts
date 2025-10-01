@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { FormData } from '@/components/form/StepTwo'
-import { DEFAULT_RUN_COUNT, hasAllRequiredFiles } from '@/app/config'
+import { DEFAULT_GEF_PROBE_RADIUS, DEFAULT_RUN_COUNT, hasAllRequiredFiles } from '@/app/config'
 
 export const useFormState = () => {
   const [currentStep, setCurrentStep] = useState(1)
   const [files, setFiles] = useState<File[]>([])
   const [numberOfRuns, setNumberOfRuns] = useState(DEFAULT_RUN_COUNT)
+  const [GEFProbeRadius, setGEFProbeRadius] = useState(DEFAULT_GEF_PROBE_RADIUS)
   const [formData, setFormData] = useState<FormData>({
     fullName: '',
     email: '',
@@ -17,6 +18,7 @@ export const useFormState = () => {
     setCurrentStep(1)
     setFiles([])
     setNumberOfRuns(DEFAULT_RUN_COUNT)
+    setGEFProbeRadius(DEFAULT_GEF_PROBE_RADIUS)
     setFormData({
       fullName: '',
       email: '',
@@ -56,11 +58,13 @@ export const useFormState = () => {
     currentStep,
     files,
     numberOfRuns,
+    GEFProbeRadius,
     formData,
     
     // Setters
     setFiles,
     setNumberOfRuns,
+    setGEFProbeRadius,
     setFormData,
     
     // Actions

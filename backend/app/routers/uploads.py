@@ -24,6 +24,7 @@ async def upload(
     organization: str = Form(""),
     description: str = Form(""),
     numberOfRuns: int = Form(1),
+    GEFProbeRadius: int = Form(3),
     user_id: Optional[str] = Form(None),
     files: List[UploadFile] = File(..., alias="files"),
     _ = Depends(bind_user_id),
@@ -47,17 +48,18 @@ async def upload(
     # Save metadata
     with open(os.path.join(user_dir, "user_info.txt"), "w") as f:
         f.write(
-                f"Name: {name}" \
-                f"Email: {email}" \
-                f"Organization: {organization}" \
+                f"Name: {name}\n" \
+                f"Email: {email}\n" \
+                f"Organization: {organization}\n" \
             )
         f.write(
-            f"Description: {description}" \
-            f"Number of Runs: {numberOfRuns}" \
+            f"Description: {description}\n" \
+            f"Number of Runs: {numberOfRuns}\n" \
+            f"GEF Probe Radius: {GEFProbeRadius}\n" \
         )
         f.write(
-            f"User ID: {req_user_id}" \
-            f"Timestamp: {timestamp}" \
+            f"User ID: {req_user_id}\n" \
+            f"Timestamp: {timestamp}\n" \
         )
 
     # Save files to staging
@@ -68,6 +70,7 @@ async def upload(
         run_meta = stage_files_and_start_nf(
             local_files=local_paths,
             number_of_runs=numberOfRuns,
+            gef_probe_radius=GEFProbeRadius,
             req_user_id=req_user_id,
             email=email,
             name=name,

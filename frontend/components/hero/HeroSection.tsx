@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Volume2 } from "lucide-react"
-import MolecularScene from "@/components/three-scene/MolecularScene"
+import Ballpit from '../Ballpit'
 
 /** Types a sentence with a highlighted middle segment (keeps styling intact). */
 function TypewriterParagraph({
@@ -76,7 +75,18 @@ export default function HeroSection({ onScrollToForm }: HeroSectionProps) {
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#F5F4F9] via-[#E8E3F0] to-[#DDD4E8]">
       {/* 3D Background Scene — now full-bleed */}
       <div className="absolute inset-0 z-0">
-        <MolecularScene />
+        {/* <MolecularScene /> */}
+        <Ballpit
+          count={120}
+          gravity={0.2}
+          friction={0.8}
+          wallBounce={0.95}
+          followCursor={true}
+          colors={['#8B7DFF', '#A594FF', '#D3CFFF', '#c5c4c9ff']}
+          ambientColor={16777215}
+          ambientIntensity={0.2}
+          lightIntensity={100}
+        />
       </div>
 
       {/* Vignette + right-side emphasis fade (keeps text legible on top) */}
@@ -88,18 +98,18 @@ export default function HeroSection({ onScrollToForm }: HeroSectionProps) {
       </div>
 
       {/* Hero Content (glassmorphic left panel stacked on top of scene) */}
-      <div className="relative z-10 container mx-auto px-6 pt-28 md:pt-36 pb-16">
-        <div className="min-h-[calc(100vh-8rem)] flex items-start md:items-center">
+      <div className="relative z-10 container mx-auto ml-[10vw] px-6 pt-28 md:pt-36 pb-16">
+        <div className="min-h-[calc(100vh-10rem)] flex items-start md:items-center">
           {/* Glassmorphic Card */}
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6 }}
             className="
-              max-w-2xl
+              max-w-xl
               bg-white/15 backdrop-blur-2xl
               border border-white/30
-              rounded-2xl p-8 md:p-12
+              rounded-xl p-6 md:p-8
               shadow-[0_10px_30px_rgba(16,14,40,0.12)]
               relative overflow-hidden
             "
@@ -114,7 +124,7 @@ export default function HeroSection({ onScrollToForm }: HeroSectionProps) {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-8 flex items-center gap-2"
+              className="mb-6 flex items-center gap-2"
             >
               <div className="w-8 h-8 bg-gradient-to-br from-[#8B7DFF] to-[#A594FF] rounded-lg flex items-center justify-center">
                 <div className="w-3 h-3 bg-white rounded-full opacity-80" />
@@ -128,7 +138,7 @@ export default function HeroSection({ onScrollToForm }: HeroSectionProps) {
 
             {/* Headline */}
             <motion.h1
-              className="text-3xl md:text-4xl xl:text-5xl font-light leading-[1.1] text-[#1A1A1A] mb-8 tracking-[0.015em] max-w-[20ch]"
+              className="text-2xl md:text-3xl xl:text-4xl font-light leading-[1.1] text-[#1A1A1A] mb-6 tracking-[0.015em] max-w-[20ch]"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
@@ -186,16 +196,6 @@ export default function HeroSection({ onScrollToForm }: HeroSectionProps) {
           </motion.div>
         </div>
       </div>
-
-      {/* Audio icon */}
-      <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
-        className="fixed bottom-8 right-8 z-20 p-3 bg-white/10 backdrop-blur-md rounded-full hover:bg-white/20 transition-all duration-200"
-      >
-        <Volume2 className="w-5 h-5 text-[#1A1A1A]/70" />
-      </motion.button>
 
       {/* Scroll indicator */}
       <motion.button

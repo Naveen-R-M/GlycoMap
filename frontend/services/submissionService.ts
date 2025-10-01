@@ -4,6 +4,7 @@ import { FormData as FormDataType } from '@/components/form/StepTwo'
 export interface SubmissionData {
   files: File[]
   numberOfRuns: number
+  GEFProbeRadius: number
   formData: FormDataType
 }
 
@@ -27,6 +28,7 @@ export class SubmissionService {
     formData.append('organization', data.formData.organization)
     formData.append('description', data.formData.description)
     formData.append('numberOfRuns', data.numberOfRuns.toString())
+    formData.append('GEFProbeRadius', data.GEFProbeRadius.toString())
     
     try {
       const response = await fetch(UPLOAD_ENDPOINT, {

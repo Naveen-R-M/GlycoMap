@@ -95,7 +95,8 @@ def stage_archive_to_inputs(
     sftp: paramiko.SFTPClient,
     local_path: str,
     req_user_id: str,
-    number_of_runs: int
+    number_of_runs: int,
+    gef_probe_radius: int = 3
 ) -> str:
     """
     Upload the user’s archive/file to a staging area on HPC,
@@ -132,7 +133,7 @@ def stage_archive_to_inputs(
           *) mkdir -p "{extract_dir}/input" && cp "{remote_archive}" "{extract_dir}/input/" ;;
         esac
 
-        # ensure input.dat has NRUNS
+        # ensure input.dat has NRUNS and GEF_PROBE_RADIUS
         INPUT_DAT="{extract_dir}/input.dat"
         if [ -f "$INPUT_DAT" ]; then
           if grep -q '^NRUNS=' "$INPUT_DAT"; then
@@ -140,9 +141,15 @@ def stage_archive_to_inputs(
           else
             echo 'NRUNS={number_of_runs}' >> "$INPUT_DAT"
           fi
+          if grep -q '^GEF_PROBE_RADIUS=' "$INPUT_DAT"; then
+            sed -i 's/^GEF_PROBE_RADIUS=.*/GEF_PROBE_RADIUS={gef_probe_radius}/' "$INPUT_DAT"
+          else
+            echo 'GEF_PROBE_RADIUS={gef_probe_radius}' >> "$INPUT_DAT"
+          fi
         else
           cat > "$INPUT_DAT" <<EOF
 NRUNS={number_of_runs}
+GEF_PROBE_RADIUS={gef_probe_radius}
 DEVIATION=4.0
 COARSE=false
 SAMPLING=simulation
@@ -168,7 +175,8 @@ def submit_nextflow(
     email: str,
     name: str,
     organization: str = "",
-    description: str = ""
+    description: str = "",
+    gef_probe_radius: int = 3
 ) -> dict:
     """
     Writes params.json on HPC and starts nextflow in background (nohup).
@@ -189,7 +197,8 @@ def submit_nextflow(
         "email": email,
         "name": name,
         "organization": organization,
-        "description": description
+        "description": description,
+        "gef_probe_radius": gef_probe_radius
     }
     sftp = ssh.open_sftp()
     
@@ -231,6 +240,7 @@ def submit_nextflow(
 def stage_files_and_start_nf(
     local_files: List[str],
     number_of_runs: int,
+    gef_probe_radius: int,
     req_user_id: str,
     email: str,
     name: str,
@@ -258,13 +268,14 @@ def stage_files_and_start_nf(
         # stage each file (upload→extract→place)
         placed = []
         for lf in local_files:
-            p = stage_archive_to_inputs(ssh, sftp, lf, req_user_id, number_of_runs)
+            p = stage_archive_to_inputs(ssh, sftp, lf, req_user_id, number_of_runs, gef_probe_radius)
             placed.append(p)
 
         # kick off one Nextflow run (discovers all placed folders)
         meta = submit_nextflow(
             ssh, req_user_id=req_user_id, email=email, name=name,
-            organization=organization, description=description
+            organization=organization, description=description,
+            gef_probe_radius=gef_probe_radius
         )
         meta["placed_projects"] = placed
         return meta

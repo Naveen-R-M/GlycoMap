@@ -25,9 +25,11 @@ const MultiStepForm = forwardRef<HTMLDivElement, MultiStepFormProps>(
       currentStep,
       files,
       numberOfRuns,
+      GEFProbeRadius,
       formData,
       setFiles,
       setNumberOfRuns,
+      setGEFProbeRadius,
       setFormData,
       nextStep,
       prevStep,
@@ -45,6 +47,7 @@ const MultiStepForm = forwardRef<HTMLDivElement, MultiStepFormProps>(
         const response = await SubmissionService.submit({
           files,
           numberOfRuns,
+          GEFProbeRadius,
           formData,
         })
         
@@ -83,8 +86,10 @@ const MultiStepForm = forwardRef<HTMLDivElement, MultiStepFormProps>(
                     <StepOne
                       files={files}
                       numberOfRuns={numberOfRuns}
+                      GEFProbeRadius={GEFProbeRadius}
                       onFilesChange={setFiles}
                       onNumberOfRunsChange={setNumberOfRuns}
+                      onGEFProbeRadiusChange={setGEFProbeRadius}
                     />
                   )}
                   {currentStep === 2 && (

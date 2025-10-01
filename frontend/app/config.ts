@@ -103,3 +103,4 @@ export const SUBMISSION_ERROR_DISPLAY_TIME_MS = 5000
 
 // Default parameters
 export const DEFAULT_RUN_COUNT = 1
+export const DEFAULT_GEF_PROBE_RADIUS = 3
