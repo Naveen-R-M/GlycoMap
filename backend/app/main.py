@@ -4,7 +4,7 @@ from app.config import settings
 from app.middleware import RequestContextMiddleware
 from app.routers import root, uploads
 
-app = FastAPI(title="Allosmod Uploader", version="1.0.0")
+app = FastAPI(title="GlycoMap Backend", version="1.0.0")
 
 # Middleware
 app.add_middleware(RequestContextMiddleware)
