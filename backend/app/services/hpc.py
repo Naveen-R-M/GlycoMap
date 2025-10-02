@@ -1,10 +1,12 @@
-import os, posixpath, time, json, pathlib
+import os, posixpath, time, json
 from typing import Optional, List, Tuple
 import paramiko
 
 from ..config import settings
 
+
 def _connect():
+    """Establish SSH connection to HPC"""
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -28,9 +30,9 @@ def _connect():
         hostname=settings.HPC_HOST,
         port=settings.HPC_PORT,
         username=settings.HPC_USER,
-        pkey=pkey,                         # ok if None
-        password=getattr(settings, "HPC_PASSWORD", None),  # optional fallback if allowed
-        look_for_keys=True,                # try ~/.ssh and agent keys too
+        pkey=pkey,
+        password=getattr(settings, "HPC_PASSWORD", None),
+        look_for_keys=True,
         allow_agent=True,
         timeout=20,
     )
@@ -38,116 +40,157 @@ def _connect():
     return ssh, sftp
 
 
-def _sftp_mkdirs(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
-    """Make directories recursively via SFTP with SSH fallback."""
-    # First, try the SFTP approach
-    parts = remote_dir.strip("/").split("/")
-    cur = ""
-    sftp_success = True
-    
-    for p in parts:
-        cur = f"{cur}/{p}" if cur else f"/{p}"
-        try:
-            sftp.stat(cur)
-        except IOError:
-            try:
-                sftp.mkdir(cur)
-            except IOError:
-                sftp_success = False
-                break
-    
-    # If SFTP failed, use SSH as fallback (more reliable for complex paths)
-    if not sftp_success:
-        try:
-            # Get SSH client from the SFTP transport
-            ssh_client = paramiko.SSHClient()
-            ssh_client._transport = sftp.get_channel().get_transport()
-            
-            # Use mkdir -p which is more reliable
-            stdin, stdout, stderr = ssh_client.exec_command(f'mkdir -p "{remote_dir}"')
-            exit_code = stdout.channel.recv_exit_status()
-            
-            if exit_code != 0:
-                error_msg = stderr.read().decode().strip()
-                raise RuntimeError(f"SSH mkdir failed: {error_msg}")
-                
-        except Exception as e:
-            raise RuntimeError(f"Both SFTP and SSH directory creation failed: {e}")
-
-def _run_remote(ssh: paramiko.SSHClient, cmd: str, env: Optional[dict] = None) -> Tuple[int,str,str]:
-    # Prefix env exports
+def _run_remote(ssh: paramiko.SSHClient, cmd: str, env: Optional[dict] = None) -> Tuple[int, str, str]:
+    """Execute a command on remote HPC via SSH"""
     export = ""
     if env:
-        export = " ".join([f"{k}='{v}'" for k,v in env.items()])
+        export = " ".join([f"{k}='{v}'" for k, v in env.items()])
         export = f"export {export} && "
+    
     stdin, stdout, stderr = ssh.exec_command(export + cmd)
     out = stdout.read().decode()
     err = stderr.read().decode()
     code = stdout.channel.recv_exit_status()
     return code, out, err
 
+
 def _put_file(sftp: paramiko.SFTPClient, local: str, remote: str) -> None:
-    # Just put the file - we'll ensure parent directories exist beforehand
+    """Upload a file via SFTP"""
     sftp.put(local, remote)
 
-def stage_archive_to_inputs(
-    ssh: paramiko.SSHClient,
-    sftp: paramiko.SFTPClient,
-    local_path: str,
-    req_user_id: str,
-    number_of_runs: int,
-    gef_probe_radius: int = 3
-) -> str:
+
+def setup_hpc_directories(ssh: paramiko.SSHClient, req_user_id: str) -> dict:
     """
-    Upload the user’s archive/file to a staging area on HPC,
-    then extract/place it under HPC_INPUTS_ROOT/<user_id>/<project>.
-    Returns the final project folder path on HPC.
-    """
-    filename = os.path.basename(local_path)
-    stamp = str(int(time.time()))
-    remote_stage = posixpath.join(settings.HPC_LOGS_DIR, req_user_id, "staging", stamp)
-    remote_archive = posixpath.join(remote_stage, filename)
+    Navigate to GlycoMap-Engine and create directory structure:
+    - inputs/
+    - outputs/
+    - logs/
+    - inputs/{user_id}/
     
-    # Create staging directory using SSH (more reliable)
-    cmd = f'mkdir -p "{remote_stage}"'
+    Returns dict with paths
+    """
+    cmd = f"""
+        set -e
+        cd {settings.HPC_BASE_DIR} || {{ echo "Directory {settings.HPC_BASE_DIR} does not exist" >&2; exit 1; }}
+        mkdir -p inputs outputs logs
+        mkdir -p inputs/{req_user_id}
+        pwd
+    """.strip()
+    
     code, out, err = _run_remote(ssh, cmd)
     if code != 0:
-        raise RuntimeError(f"Failed to create staging directory: {err}")
-    _put_file(sftp, local_path, remote_archive)
+        raise RuntimeError(f"Failed to setup HPC directories: {err}")
+    
+    base_path = out.strip()
+    
+    return {
+        "base_dir": base_path,
+        "inputs_dir": posixpath.join(base_path, "inputs"),
+        "outputs_dir": posixpath.join(base_path, "outputs"),
+        "logs_dir": posixpath.join(base_path, "logs"),
+        "user_inputs_dir": posixpath.join(base_path, "inputs", req_user_id)
+    }
 
-    project_stem = os.path.splitext(filename)[0]
-    extract_dir = posixpath.join(remote_stage, project_stem)
-    inputs_root  = posixpath.join(settings.HPC_INPUTS_ROOT, req_user_id)
-    final_target = posixpath.join(inputs_root, project_stem)
 
-    # Build a remote bash to extract and ensure input.dat with NRUNS
-    remote_script = f"""
-        set -euo pipefail
-        [ -f "{settings.HPC_MODULE_INIT or ''}" ] && source "{settings.HPC_MODULE_INIT}" || true
-        {settings.HPC_MODULES or ''}
+def get_next_folder_index(ssh: paramiko.SSHClient, user_inputs_dir: str) -> int:
+    """
+    Find the next available folder_i index in user's inputs directory
+    """
+    cmd = f"""
+        if [ -d "{user_inputs_dir}" ]; then
+            cd {user_inputs_dir}
+            ls -1d folder_* 2>/dev/null | sed 's/folder_//' | sort -n | tail -1
+        fi
+    """.strip()
+    
+    code, out, err = _run_remote(ssh, cmd)
+    
+    if code != 0 or not out.strip():
+        return 1  # Start with folder_1
+    
+    try:
+        last_index = int(out.strip())
+        return last_index + 1
+    except (ValueError, AttributeError):
+        return 1
 
-        mkdir -p "{extract_dir}" "{inputs_root}"
-        case "{filename}" in
-          *.zip) unzip -o "{remote_archive}" -d "{extract_dir}" ;;
-          *.tar|*.tgz|*.gz) tar -xf "{remote_archive}" -C "{extract_dir}" ;;
-          *) mkdir -p "{extract_dir}/input" && cp "{remote_archive}" "{extract_dir}/input/" ;;
-        esac
 
-        # ensure input.dat has NRUNS and GEF_PROBE_RADIUS
-        INPUT_DAT="{extract_dir}/input.dat"
-        if [ -f "$INPUT_DAT" ]; then
-          if grep -q '^NRUNS=' "$INPUT_DAT"; then
-            sed -i 's/^NRUNS=.*/NRUNS={number_of_runs}/' "$INPUT_DAT"
-          else
-            echo 'NRUNS={number_of_runs}' >> "$INPUT_DAT"
-          fi
-          if grep -q '^GEF_PROBE_RADIUS=' "$INPUT_DAT"; then
-            sed -i 's/^GEF_PROBE_RADIUS=.*/GEF_PROBE_RADIUS={gef_probe_radius}/' "$INPUT_DAT"
-          else
-            echo 'GEF_PROBE_RADIUS={gef_probe_radius}' >> "$INPUT_DAT"
-          fi
-        else
-          cat > "$INPUT_DAT" <<EOF
+def upload_and_stage_files(
+    ssh: paramiko.SSHClient,
+    sftp: paramiko.SFTPClient,
+    local_files: List[str],
+    user_inputs_dir: str,
+    folder_index: int,
+    req_user_id: str,
+    email: str,
+    name: str,
+    organization: str,
+    description: str,
+    number_of_runs: int,
+    gef_probe_radius: int
+) -> str:
+    """
+    Upload files to HPC and organize them in folder_i structure.
+    Creates input.dat if not present, updates if present.
+    Creates metadata.json with user information.
+    
+    Returns the folder path.
+    """
+    folder_name = f"folder_{folder_index}"
+    folder_path = posixpath.join(user_inputs_dir, folder_name)
+    
+    # Create the folder
+    cmd = f'mkdir -p "{folder_path}"'
+    code, out, err = _run_remote(ssh, cmd)
+    if code != 0:
+        raise RuntimeError(f"Failed to create folder {folder_name}: {err}")
+    
+    # Upload each file
+    uploaded_files = []
+    for local_file in local_files:
+        filename = os.path.basename(local_file)
+        remote_file = posixpath.join(folder_path, filename)
+        
+        try:
+            _put_file(sftp, local_file, remote_file)
+            uploaded_files.append(filename)
+        except Exception as e:
+            raise RuntimeError(f"Failed to upload {filename}: {e}")
+    
+    # Create/update input.dat with parameters
+    input_dat_path = posixpath.join(folder_path, "input.dat")
+    
+    # Check if input.dat was uploaded
+    has_input_dat = "input.dat" in uploaded_files
+    
+    if has_input_dat:
+        # Update existing input.dat
+        update_cmd = f"""
+            cd {folder_path}
+            INPUT_DAT="input.dat"
+            
+            # Update or add NRUNS
+            if grep -q '^NRUNS=' "$INPUT_DAT"; then
+                sed -i 's/^NRUNS=.*/NRUNS={number_of_runs}/' "$INPUT_DAT"
+            else
+                echo 'NRUNS={number_of_runs}' >> "$INPUT_DAT"
+            fi
+            
+            # Update or add GEF_PROBE_RADIUS
+            if grep -q '^GEF_PROBE_RADIUS=' "$INPUT_DAT"; then
+                sed -i 's/^GEF_PROBE_RADIUS=.*/GEF_PROBE_RADIUS={gef_probe_radius}/' "$INPUT_DAT"
+            else
+                echo 'GEF_PROBE_RADIUS={gef_probe_radius}' >> "$INPUT_DAT"
+            fi
+        """.strip()
+        
+        code, out, err = _run_remote(ssh, update_cmd)
+        if code != 0:
+            raise RuntimeError(f"Failed to update input.dat: {err}")
+    else:
+        # Create new input.dat
+        create_cmd = f"""
+            cat > {input_dat_path} <<'EOF'
 NRUNS={number_of_runs}
 GEF_PROBE_RADIUS={gef_probe_radius}
 DEVIATION=4.0
@@ -155,87 +198,80 @@ COARSE=false
 SAMPLING=simulation
 TEMPERATURE=300.0
 EOF
-        fi
-
-        # Move into inputs root (overwrite if exists)
-        rm -rf "{final_target}"
-        mkdir -p "{inputs_root}"
-        mv "{extract_dir}" "{final_target}"
-        echo "{final_target}"
-    """.strip()
-
-    code, out, err = _run_remote(ssh, remote_script)
-    if code != 0:
-        raise RuntimeError(f"Remote staging failed:\n{err}")
-    return out.strip()
-
-def submit_nextflow(
-    ssh: paramiko.SSHClient,
-    req_user_id: str,
-    email: str,
-    name: str,
-    organization: str = "",
-    description: str = "",
-    gef_probe_radius: int = 3
-) -> dict:
-    """
-    Writes params.json on HPC and starts nextflow in background (nohup).
-    Returns run metadata (run_name, pid, report/trace/timeline paths).
-    """
-    ts = int(time.time())
-    run_name = f"allosmod-{req_user_id[:8]}-{ts}"
-    nf_logs_user = posixpath.join(settings.HPC_LOGS_DIR, req_user_id, "nextflow")
-    params_path  = posixpath.join(nf_logs_user, f"params-{ts}.json")
-    report       = posixpath.join(nf_logs_user, f"{run_name}-report.html")
-    trace        = posixpath.join(nf_logs_user, f"{run_name}-trace.txt")
-    timeline     = posixpath.join(nf_logs_user, f"{run_name}-timeline.html")
-    stdout_log   = posixpath.join(nf_logs_user, f"{run_name}.out")
-
-    # write params.json via SFTP
-    params_payload = {
+        """.strip()
+        
+        code, out, err = _run_remote(ssh, create_cmd)
+        if code != 0:
+            raise RuntimeError(f"Failed to create input.dat: {err}")
+    
+    # Create metadata.json with user information
+    metadata = {
         "user_id": req_user_id,
         "email": email,
         "name": name,
         "organization": organization,
         "description": description,
-        "gef_probe_radius": gef_probe_radius
+        "number_of_runs": number_of_runs,
+        "gef_probe_radius": gef_probe_radius,
+        "uploaded_files": uploaded_files,
+        "timestamp": int(time.time()),
+        "folder": folder_name
     }
-    sftp = ssh.open_sftp()
     
-    # Create nextflow logs directory using SSH (more reliable)
-    cmd = f'mkdir -p "{nf_logs_user}"'
-    code, out, err = _run_remote(ssh, cmd)
-    if code != 0:
-        raise RuntimeError(f"Failed to create nextflow logs directory: {err}")
-    with sftp.file(params_path, "w") as f:
-        f.write(json.dumps(params_payload))
+    metadata_json = json.dumps(metadata, indent=2)
+    metadata_path = posixpath.join(folder_path, "metadata.json")
+    
+    # Write metadata.json via SFTP
+    with sftp.file(metadata_path, "w") as f:
+        f.write(metadata_json)
+    
+    return folder_path
 
-    # build remote command - use nf_run.sh script instead of direct nextflow
-    extra = settings.HPC_NEXTFLOW_EXTRA_ARGS.strip()
-    nf_script = posixpath.join(settings.HPC_SCRATCH_ROOT, "nf_run.sh")
+
+def call_pipeline_script(
+    ssh: paramiko.SSHClient,
+    user_inputs_dir: str,
+    req_user_id: str,
+    email: str,
+    name: str
+) -> dict:
+    """
+    Call pipeline.sh script with required parameters:
+    ./pipeline.sh '<inputs_path>' '<user_id>' '<email>' '<name>'
+    
+    Example:
+    ./pipeline.sh '/scratch/rajagopalmohanraj.n/GlycoMap-Engine/inputs/test-user/' 
+                  'test-user' 
+                  'rajagopalmohanraj.n@northeastern.edu' 
+                  'Naveen Rajagopal Mohanraj'
+    
+    Returns dict with execution details
+    """
+    # Ensure user_inputs_dir ends with /
+    if not user_inputs_dir.endswith('/'):
+        user_inputs_dir += '/'
+    
+    # Build the pipeline command
     cmd = f"""
-        set -euo pipefail
-        export SCRATCH_ROOT="{settings.HPC_SCRATCH_ROOT}"
-        cd "{settings.HPC_NEXTFLOW_PROJECT_DIR}"
-        nohup {nf_script} run "{settings.HPC_NEXTFLOW_ENTRY}" \
-          -params-file "{params_path}" -name "{run_name}" \
-          -with-report "{report}" -with-trace "{trace}" -with-timeline "{timeline}" \
-          {extra} > "{stdout_log}" 2>&1 & echo $!
+        set -e
+        cd {settings.HPC_BASE_DIR}
+        chmod +x {settings.HPC_PIPELINE_SCRIPT} 2>/dev/null || true
+        ./{settings.HPC_PIPELINE_SCRIPT} '{user_inputs_dir}' '{req_user_id}' '{email}' '{name}'
     """.strip()
-
+    
+    # Execute the pipeline script
     code, out, err = _run_remote(ssh, cmd)
-    if code != 0 or not out.strip():
-        raise RuntimeError(f"Failed to start Nextflow:\n{err}")
-    pid = out.strip()
+    
+    if code != 0:
+        raise RuntimeError(f"Pipeline script failed with exit code {code}:\nSTDOUT: {out}\nSTDERR: {err}")
+    
     return {
-        "run_name": run_name,
-        "pid": pid,
-        "params_file": params_path,
-        "report": report,
-        "trace": trace,
-        "timeline": timeline,
-        "stdout": stdout_log,
+        "exit_code": code,
+        "stdout": out.strip(),
+        "stderr": err.strip(),
+        "command": f"./pipeline.sh '{user_inputs_dir}' '{req_user_id}' '{email}' '{name}'"
     }
+
 
 def stage_files_and_start_nf(
     local_files: List[str],
@@ -247,38 +283,72 @@ def stage_files_and_start_nf(
     organization: str,
     description: str,
 ) -> dict:
+    """
+    Main orchestration function:
+    1. Connect to HPC
+    2. Navigate to GlycoMap-Engine and setup directory structure
+    3. Create inputs/, outputs/, logs/ directories
+    4. Upload files to inputs/{user_id}/folder_i/
+    5. Create/update input.dat with NRUNS and GEF_PROBE_RADIUS
+    6. Create metadata.json with user information
+    7. Call pipeline.sh script
+    8. Return job metadata
+    """
     ssh, sftp = _connect()
     try:
-        # ensure base dirs exist using SSH command (more reliable)
-        logs_dir = posixpath.join(settings.HPC_LOGS_DIR, req_user_id)
-        inputs_dir = posixpath.join(settings.HPC_INPUTS_ROOT, req_user_id)
+        # Step 1: Setup base directory structure in GlycoMap-Engine
+        paths = setup_hpc_directories(ssh, req_user_id)
         
-        # Use SSH command for reliable directory creation
-        cmd = f'mkdir -p "{logs_dir}" "{inputs_dir}"'
-        code, out, err = _run_remote(ssh, cmd)
-        if code != 0:
-            raise RuntimeError(f"Failed to create directories: {err}")
+        # Step 2: Get next folder index for this user
+        folder_index = get_next_folder_index(ssh, paths["user_inputs_dir"])
         
-        # Verify directories are writable
-        test_cmd = f'test -w "{logs_dir}" && test -w "{inputs_dir}" && echo "OK"'
-        code, out, err = _run_remote(ssh, test_cmd)
-        if code != 0 or "OK" not in out:
-            raise RuntimeError(f"Directories not writable: {err}")
-
-        # stage each file (upload→extract→place)
-        placed = []
-        for lf in local_files:
-            p = stage_archive_to_inputs(ssh, sftp, lf, req_user_id, number_of_runs, gef_probe_radius)
-            placed.append(p)
-
-        # kick off one Nextflow run (discovers all placed folders)
-        meta = submit_nextflow(
-            ssh, req_user_id=req_user_id, email=email, name=name,
-            organization=organization, description=description,
+        # Step 3: Upload and stage files in folder_i
+        folder_path = upload_and_stage_files(
+            ssh=ssh,
+            sftp=sftp,
+            local_files=local_files,
+            user_inputs_dir=paths["user_inputs_dir"],
+            folder_index=folder_index,
+            req_user_id=req_user_id,
+            email=email,
+            name=name,
+            organization=organization,
+            description=description,
+            number_of_runs=number_of_runs,
             gef_probe_radius=gef_probe_radius
         )
-        meta["placed_projects"] = placed
+        
+        # Step 4: Call pipeline.sh script
+        pipeline_result = call_pipeline_script(
+            ssh=ssh,
+            user_inputs_dir=paths["user_inputs_dir"],
+            req_user_id=req_user_id,
+            email=email,
+            name=name
+        )
+        
+        # Build response metadata
+        ts = int(time.time())
+        meta = {
+            "run_name": f"glycomap-{req_user_id[:8]}-{ts}",
+            "pid": str(ts),  # Using timestamp as job ID
+            "folder_path": folder_path,
+            "folder_index": folder_index,
+            "hpc_paths": paths,
+            "pipeline": pipeline_result,
+            "user_inputs_dir": paths["user_inputs_dir"],
+            "params": {
+                "number_of_runs": number_of_runs,
+                "gef_probe_radius": gef_probe_radius,
+                "email": email,
+                "name": name,
+                "organization": organization,
+                "description": description
+            }
+        }
+        
         return meta
+        
     finally:
         try:
             sftp.close()
